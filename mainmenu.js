@@ -52,6 +52,10 @@ function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function roundArea(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
 function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -476,6 +480,7 @@ function splitAreaIntoPackCounts(area, variants) {
 
 function calculateMaterialLayer(layer, answers, bindings) {
   const binding = bindings[layer.id];
+  const requestedArea = roundArea(Number(answers.aream2 || 0));
 
   if (binding?.skipLayer) {
     return {
@@ -487,6 +492,8 @@ function calculateMaterialLayer(layer, answers, bindings) {
       items: [],
       total: 0,
       packCountsMap: {},
+      requestedArea,
+      coveredArea: 0,
     };
   }
 
@@ -504,12 +511,20 @@ function calculateMaterialLayer(layer, answers, bindings) {
       items: [],
       total: 0,
       packCountsMap: {},
+      requestedArea,
+      coveredArea: 0,
     };
   }
 
   const area = Number(answers.aream2 || 0);
   const items = splitAreaIntoPackCounts(area, material.variants);
   const total = roundMoney(items.reduce((sum, item) => sum + item.total, 0));
+  const coveredArea = roundArea(
+    items.reduce(
+      (sum, item) => sum + Number(item.count || 0) * Number(item.coverage || 0),
+      0,
+    ),
+  );
 
   const packCountsMap = {};
   for (const item of items) {
@@ -525,6 +540,8 @@ function calculateMaterialLayer(layer, answers, bindings) {
     items,
     total,
     packCountsMap,
+    requestedArea,
+    coveredArea,
   };
 }
 
@@ -660,6 +677,9 @@ function printResults(report) {
       status: layer.skipped ? "Пропущен" : "Рассчитан",
       statusColor: layer.skipped ? C.red : C.green,
     });
+
+    printKV("Нужно закрыть", `${layer.requestedArea || 0} м²`, C.soft);
+    printKV("Фактически закрывает", `${layer.coveredArea || 0} м²`, C.teal);
 
     const tint = report.tintResults.find((x) => x.layerId === layer.layerId);
     if (tint) {
