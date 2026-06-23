@@ -8,7 +8,28 @@ export const colorSystem = {
       "label": "Нужен грунт глубокого проникновения?",
       "type": "select",
       "required": true,
-      "options": []
+      "options": [
+        {
+          "value": "yes",
+          "label": "Да",
+          "binding": {
+            "layerId": "deepprimer",
+            "materialKey": "",
+            "materialQuery": "Грунт ФИКС СУПЕР",
+            "skipLayer": false
+          }
+        },
+        {
+          "value": "no",
+          "label": "Нет",
+          "binding": {
+            "layerId": "deepprimer",
+            "materialKey": "",
+            "materialQuery": "",
+            "skipLayer": true
+          }
+        }
+      ]
     },
     {
       "key": "color",

@@ -2,6 +2,20 @@ import fs from "node:fs";
 import path from "node:path";
 import readline from "node:readline";
 import { fileURLToPath } from "node:url";
+import {
+  C,
+  clear,
+  printHeader,
+  printLine,
+  printInfo,
+  printSuccess,
+  printError,
+  printMuted,
+  printSection,
+  printKV,
+  printCard,
+  printMenuHint,
+} from "./artone-ui.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +63,23 @@ function deepClone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function moveArrayItem(array, fromIndex, toIndex) {
+  if (!Array.isArray(array)) return false;
+  if (
+    fromIndex < 0 ||
+    fromIndex >= array.length ||
+    toIndex < 0 ||
+    toIndex >= array.length ||
+    fromIndex === toIndex
+  ) {
+    return false;
+  }
+
+  const [item] = array.splice(fromIndex, 1);
+  array.splice(toIndex, 0, item);
+  return true;
+}
+
 function readJsObjectExport(filePath, exportName) {
   const source = fs.readFileSync(filePath, "utf-8");
   const cleaned = source
@@ -79,7 +110,7 @@ function saveRegistry(registry) {
 }
 
 function resolveLocalPath(fileName) {
-  return path.join(__dirname, String(fileName || "").replace(/^\.\//, ""));
+  return path.join(__dirname, String(fileName || "").replace(/^\.\/+/, ""));
 }
 
 function ensureFileExists(filePath, exportName, defaultValue) {
@@ -300,21 +331,27 @@ function ensureAllRegistryColorApplications(system, colors) {
 }
 
 function listSystems(registry) {
-  console.log("\nСистемы колеровки:");
+  printSection("Системы колеровки");
   if (!registry.registry.length) {
-    console.log("Пока нет ни одной системы.");
+    printMuted("Пока нет ни одной системы.");
     return;
   }
 
   registry.registry.forEach((item, index) => {
-    console.log(`${index + 1}. ${item.name} (${item.id}) -> ${item.file}`);
+    printCard({
+      key: String(index + 1),
+      title: `${item.name} (${item.id})`,
+      file: item.file,
+      status: item.active ? "Активна" : "Неактивна",
+      statusColor: item.active ? C.green : C.red,
+    });
   });
 }
 
 function listQuestions(system) {
-  console.log("\nВопросы системы:");
+  printSection("Вопросы системы");
   if (!system.questions.length) {
-    console.log("Вопросов пока нет.");
+    printMuted("Вопросов пока нет.");
     return;
   }
 
@@ -323,64 +360,76 @@ function listQuestions(system) {
       q.type === "select"
         ? `, options=${Array.isArray(q.options) ? q.options.length : 0}`
         : "";
-    console.log(
+
+    printInfo(
       `${index + 1}. ${q.label} [key=${q.key}, type=${q.type}, required=${q.required}${optionsInfo}]`,
     );
   });
 }
 
 function listQuestionOptions(question) {
-  console.log(`\nВарианты ответа для: ${question.label}`);
+  printSection(`Варианты ответа: ${question.label}`);
   if (!Array.isArray(question.options) || !question.options.length) {
-    console.log("Вариантов пока нет.");
+    printMuted("Вариантов пока нет.");
     return;
   }
 
   question.options.forEach((item, index) => {
     const binding = item.binding || {};
     const bindingText = binding.layerId
-      ? ` -> layer=${binding.layerId}, materialKey=${binding.materialKey || "-"}, materialQuery=${binding.materialQuery || "-"}, skip=${binding.skipLayer ? "yes" : "no"}`
-      : "";
-    console.log(
-      `${index + 1}. ${item.label} [value=${item.value}]${bindingText}`,
-    );
+      ? `layer=${binding.layerId}, materialKey=${binding.materialKey || "-"}, materialQuery=${binding.materialQuery || "-"}, skip=${binding.skipLayer ? "yes" : "no"}`
+      : "без привязки";
+
+    printCard({
+      key: String(index + 1),
+      title: `${item.label} [value=${item.value}]`,
+      description: bindingText,
+    });
   });
 }
 
 function listLayers(system) {
-  console.log("\nСлои системы:");
+  printSection("Слои системы");
   if (!system.layers.length) {
-    console.log("Слоев пока нет.");
+    printMuted("Слоев пока нет.");
     return;
   }
 
   system.layers.forEach((layer, index) => {
     const packs = (layer.packaging || []).join(", ");
     const materialMode = layer.materialOptions ? "options" : "single";
-    console.log(
-      `${index + 1}. ${layer.name} [id=${layer.id}] mode=${materialMode} материал=${layer.material || "-"} фасовки=${packs}`,
-    );
+
+    printCard({
+      key: String(index + 1),
+      title: `${layer.name} [id=${layer.id}]`,
+      description: `Режим=${materialMode}; материал=${layer.material || "-"}; фасовки=${packs || "-"}`,
+      status: layer.materialOptions ? "Material options" : "Single material",
+      statusColor: layer.materialOptions ? C.teal : C.soft,
+    });
 
     if (layer.materialOptions) {
       Object.keys(layer.materialOptions).forEach((key) => {
-        console.log(`   - option: ${key}`);
+        printMuted(`   - option: ${key}`);
       });
+      console.log("");
     }
   });
 }
 
 function listMathTypes(system, mathTypesState) {
   const items = mathTypesState.items;
-  console.log("\nТипы колеровки:");
+  printSection("Типы колеровки");
   if (!items.length) {
-    console.log("Типов колеровки пока нет.");
+    printMuted("Типов колеровки пока нет.");
     return items;
   }
 
   items.forEach((item, index) => {
-    console.log(
-      `${index + 1}. ${item.name} [id=${item.id}] товар=${item.productName || "-"} туба=${item.tubeSize || "-"}`,
-    );
+    printCard({
+      key: String(index + 1),
+      title: `${item.name} [id=${item.id}]`,
+      description: `Товар=${item.productName || "-"}; туба=${item.tubeSize || "-"}; округление=${item.rounding || "-"}`,
+    });
   });
 
   return items;
@@ -388,6 +437,7 @@ function listMathTypes(system, mathTypesState) {
 
 function listColors(system, colorRegistryState) {
   const model = getColorModel(system);
+  printSection("Цвета системы");
 
   if (model === "value-linked") {
     const registryColors = ensureAllRegistryColorApplications(
@@ -395,28 +445,32 @@ function listColors(system, colorRegistryState) {
       colorRegistryState.items,
     );
 
-    console.log("\nЦвета системы:");
     if (!registryColors.length) {
-      console.log("Цветов пока нет.");
+      printMuted("Цветов пока нет.");
       return;
     }
 
     registryColors.forEach((color, index) => {
-      console.log(
-        `${index + 1}. ${color.name} [id=${color.id}] short=${color.shortName || "-"} value=${color.value ?? "-"} type=${color.coloringTypeId || "-"}`,
-      );
+      printCard({
+        key: String(index + 1),
+        title: `${color.name} [id=${color.id}]`,
+        description: `short=${color.shortName || "-"}; value=${color.value ?? "-"}; type=${color.coloringTypeId || "-"}`,
+      });
     });
     return;
   }
 
-  console.log("\nЦвета системы:");
   if (!system.colors.length) {
-    console.log("Цветов пока нет.");
+    printMuted("Цветов пока нет.");
     return;
   }
 
   system.colors.forEach((color, index) => {
-    console.log(`${index + 1}. ${color.name} (${color.code}) [id=${color.id}]`);
+    printCard({
+      key: String(index + 1),
+      title: `${color.name} (${color.code})`,
+      description: `id=${color.id}`,
+    });
   });
 }
 
@@ -471,7 +525,7 @@ function saveEditorState(editorState) {
   }
 
   editorState.dirty = false;
-  console.log("Изменения сохранены.");
+  printSuccess("Изменения сохранены.");
 }
 
 async function confirmSaveIfDirty(editorState) {
@@ -479,10 +533,10 @@ async function confirmSaveIfDirty(editorState) {
     return true;
   }
 
-  console.log("\nЕсть несохраненные изменения.");
-  console.log("1. Сохранить и продолжить");
-  console.log("2. Продолжить без сохранения");
-  console.log("3. Отмена");
+  printSection("Есть несохраненные изменения");
+  printInfo("1. Сохранить и продолжить");
+  printInfo("2. Продолжить без сохранения");
+  printInfo("3. Отмена");
 
   const choice = await ask("Выбор: ");
 
@@ -500,10 +554,10 @@ async function confirmSaveIfDirty(editorState) {
 
 async function chooseLayerForBinding(system, currentLayerId = "") {
   while (true) {
-    console.log("\nК какому слою привязать option?");
-    console.log("0. Без привязки");
+    printSection("Привязка option к слою");
+    printInfo("0. Без привязки");
     system.layers.forEach((layer, index) => {
-      console.log(`${index + 1}. ${layer.name} [id=${layer.id}]`);
+      printInfo(`${index + 1}. ${layer.name} [id=${layer.id}]`);
     });
 
     const raw = await ask(
@@ -520,7 +574,7 @@ async function chooseLayerForBinding(system, currentLayerId = "") {
     const layer = getLayerByIndex(system, num - 1);
     if (layer) return layer.id;
 
-    console.log("Неверный номер слоя.");
+    printError("Неверный номер слоя.");
   }
 }
 
@@ -529,9 +583,9 @@ async function chooseMaterialOptionKey(layer, currentKey = "") {
   if (!names.length) return "";
 
   while (true) {
-    console.log(`\nМатериальные опции слоя: ${layer.name}`);
+    printSection(`Материальные опции слоя: ${layer.name}`);
     names.forEach((name, index) => {
-      console.log(`${index + 1}. ${name}`);
+      printInfo(`${index + 1}. ${name}`);
     });
 
     const raw = await ask(
@@ -545,7 +599,7 @@ async function chooseMaterialOptionKey(layer, currentKey = "") {
     const index = Number(raw) - 1;
     if (names[index]) return names[index];
 
-    console.log("Неверный номер.");
+    printError("Неверный номер.");
   }
 }
 
@@ -642,12 +696,13 @@ async function manageQuestionOptions(editorState, question) {
 
   while (true) {
     listQuestionOptions(question);
-    console.log("\n1. Добавить вариант");
-    console.log("2. Изменить вариант");
-    console.log("3. Удалить вариант");
-    console.log("4. Настроить привязку варианта");
-    console.log("5. Сохранить");
-    console.log("6. Назад");
+    printSection("Меню вариантов ответа");
+    printInfo("1. Добавить вариант");
+    printInfo("2. Изменить вариант");
+    printInfo("3. Удалить вариант");
+    printInfo("4. Настроить привязку варианта");
+    printInfo("5. Сохранить");
+    printInfo("6. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -727,7 +782,7 @@ async function createMaterialOptionsForLayer() {
   const materialOptions = {};
 
   for (let i = 0; i < count; i++) {
-    console.log(`\nMaterial option ${i + 1}`);
+    printSection(`Material option ${i + 1}`);
     const optionName = normalizeText(await ask("Название material option: "));
     if (!optionName) continue;
     materialOptions[optionName] = [];
@@ -772,21 +827,22 @@ async function manageLayerMaterialOptions(editorState, layer) {
   }
 
   while (true) {
-    console.log(`\nMaterial options слоя: ${layer.name}`);
+    printSection(`Material options слоя: ${layer.name}`);
     const keys = Object.keys(layer.materialOptions);
     if (!keys.length) {
-      console.log("Опций пока нет.");
+      printMuted("Опций пока нет.");
     } else {
       keys.forEach((key, index) => {
-        console.log(`${index + 1}. ${key}`);
+        printInfo(`${index + 1}. ${key}`);
       });
     }
 
-    console.log("\n1. Добавить material option");
-    console.log("2. Переименовать material option");
-    console.log("3. Удалить material option");
-    console.log("4. Сохранить");
-    console.log("5. Назад");
+    printSection("Меню material options");
+    printInfo("1. Добавить material option");
+    printInfo("2. Переименовать material option");
+    printInfo("3. Удалить material option");
+    printInfo("4. Сохранить");
+    printInfo("5. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -830,9 +886,9 @@ async function manageLayerMaterialOptions(editorState, layer) {
 }
 
 async function askMultiCoefficients(layerName, packaging, current = {}) {
-  console.log(`\nКоэффициенты для ${layerName} / ${packaging}`);
+  printSection(`Коэффициенты для ${layerName} / ${packaging}`);
   if (Object.keys(current).length) {
-    console.log(`Текущие: ${JSON.stringify(current)}`);
+    printInfo(`Текущие: ${JSON.stringify(current)}`);
   }
   const raw = await ask("Введи в формате pasteA=0,pasteB=0,pasteC=0: ");
   const result = {};
@@ -848,8 +904,8 @@ async function askMultiCoefficients(layerName, packaging, current = {}) {
 }
 
 async function askSingleCoefficient(layerName, packaging, current = 0) {
-  console.log(`\nКоэффициент для ${layerName} / ${packaging}`);
-  console.log(`Текущий: ${current}`);
+  printSection(`Коэффициент для ${layerName} / ${packaging}`);
+  printInfo(`Текущий: ${current}`);
   return parseNumber(await ask("Введите число (например 1,24): "));
 }
 
@@ -961,12 +1017,15 @@ async function manageQuestions(editorState) {
 
   while (true) {
     listQuestions(system);
-    console.log("\n1. Добавить вопрос");
-    console.log("2. Изменить вопрос");
-    console.log("3. Удалить вопрос");
-    console.log("4. Варианты select-вопроса");
-    console.log("5. Сохранить");
-    console.log("6. Назад");
+    printSection("Меню вопросов");
+    printInfo("1. Добавить вопрос");
+    printInfo("2. Изменить вопрос");
+    printInfo("3. Удалить вопрос");
+    printInfo("4. Варианты select-вопроса");
+    printInfo("5. Поднять вопрос выше");
+    printInfo("6. Опустить вопрос ниже");
+    printInfo("7. Сохранить");
+    printInfo("8. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1022,11 +1081,27 @@ async function manageQuestions(editorState) {
         }
         await manageQuestionOptions(editorState, question);
       } else {
-        console.log("Это не select-вопрос.");
+        printError("Это не select-вопрос.");
       }
     } else if (choice === "5") {
-      saveEditorState(editorState);
+      const index = Number(await ask("Номер вопроса: ")) - 1;
+      const moved = moveArrayItem(system.questions, index, index - 1);
+      if (moved) {
+        markDirty(editorState);
+      } else {
+        printError("Нельзя поднять этот вопрос выше.");
+      }
     } else if (choice === "6") {
+      const index = Number(await ask("Номер вопроса: ")) - 1;
+      const moved = moveArrayItem(system.questions, index, index + 1);
+      if (moved) {
+        markDirty(editorState);
+      } else {
+        printError("Нельзя опустить этот вопрос ниже.");
+      }
+    } else if (choice === "7") {
+      saveEditorState(editorState);
+    } else if (choice === "8") {
       const ok = await confirmSaveIfDirty(editorState);
       if (ok) break;
     }
@@ -1037,15 +1112,17 @@ async function managePackaging(editorState, layer) {
   const system = editorState.system;
 
   while (true) {
-    console.log(`\nФасовки слоя: ${layer.name}`);
+    printSection(`Фасовки слоя: ${layer.name}`);
     (layer.packaging || []).forEach((pack, index) => {
-      console.log(`${index + 1}. ${pack}`);
+      printInfo(`${index + 1}. ${pack}`);
     });
-    console.log("\n1. Добавить фасовку");
-    console.log("2. Переименовать фасовку");
-    console.log("3. Удалить фасовку");
-    console.log("4. Сохранить");
-    console.log("5. Назад");
+
+    printSection("Меню фасовок");
+    printInfo("1. Добавить фасовку");
+    printInfo("2. Переименовать фасовку");
+    printInfo("3. Удалить фасовку");
+    printInfo("4. Сохранить");
+    printInfo("5. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1135,13 +1212,14 @@ async function manageLayers(editorState) {
 
   while (true) {
     listLayers(system);
-    console.log("\n1. Добавить слой");
-    console.log("2. Изменить слой");
-    console.log("3. Удалить слой");
-    console.log("4. Управление фасовками слоя");
-    console.log("5. Material options слоя");
-    console.log("6. Сохранить");
-    console.log("7. Назад");
+    printSection("Меню слоев");
+    printInfo("1. Добавить слой");
+    printInfo("2. Изменить слой");
+    printInfo("3. Удалить слой");
+    printInfo("4. Управление фасовками слоя");
+    printInfo("5. Material options слоя");
+    printInfo("6. Сохранить");
+    printInfo("7. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1278,21 +1356,23 @@ async function manageLayers(editorState) {
 
 async function manageLayerMultiCoefficients(system, color, editorState) {
   while (true) {
-    console.log(
-      `\nРедактирование коэффициентов цвета: ${color.name} (${color.code})`,
+    printSection(
+      `Редактирование коэффициентов цвета: ${color.name} (${color.code})`,
     );
     system.layers.forEach((layer, layerIndex) => {
-      console.log(`${layerIndex + 1}. ${layer.name}`);
+      printInfo(`${layerIndex + 1}. ${layer.name}`);
       (layer.packaging || []).forEach((pack, packIndex) => {
         const current = color.layers?.[layer.id]?.[pack] || {};
-        console.log(
+        printMuted(
           `   ${layerIndex + 1}.${packIndex + 1} ${pack} -> ${JSON.stringify(current)}`,
         );
       });
     });
-    console.log("\n1. Изменить коэффициенты");
-    console.log("2. Сохранить");
-    console.log("3. Назад");
+
+    printSection("Меню коэффициентов");
+    printInfo("1. Изменить коэффициенты");
+    printInfo("2. Сохранить");
+    printInfo("3. Назад");
 
     const choice = await ask("Выбор: ");
     if (choice === "1") {
@@ -1322,21 +1402,23 @@ async function manageLayerMultiCoefficients(system, color, editorState) {
 
 async function manageLayerSingleCoefficients(system, color, editorState) {
   while (true) {
-    console.log(
-      `\nРедактирование коэффициентов цвета: ${color.name} (${color.code})`,
+    printSection(
+      `Редактирование коэффициентов цвета: ${color.name} (${color.code})`,
     );
     system.layers.forEach((layer, layerIndex) => {
-      console.log(`${layerIndex + 1}. ${layer.name}`);
+      printInfo(`${layerIndex + 1}. ${layer.name}`);
       (layer.packaging || []).forEach((pack, packIndex) => {
         const current = color.layers?.[layer.id]?.[pack] ?? 0;
-        console.log(
+        printMuted(
           `   ${layerIndex + 1}.${packIndex + 1} ${pack} -> ${current}`,
         );
       });
     });
-    console.log("\n1. Изменить коэффициент");
-    console.log("2. Сохранить");
-    console.log("3. Назад");
+
+    printSection("Меню коэффициентов");
+    printInfo("1. Изменить коэффициент");
+    printInfo("2. Сохранить");
+    printInfo("3. Назад");
 
     const choice = await ask("Выбор: ");
     if (choice === "1") {
@@ -1366,18 +1448,20 @@ async function manageLayerSingleCoefficients(system, color, editorState) {
 
 async function manageValueLinkedColor(editorState, color) {
   while (true) {
-    console.log(`\nРедактирование цвета: ${color.name}`);
-    console.log(`ID: ${color.id}`);
-    console.log(`Короткое имя: ${color.shortName || "-"}`);
-    console.log(`Значение: ${color.value ?? 0}`);
-    console.log(`Тип колеровки: ${color.coloringTypeId || "-"}`);
-    console.log("\n1. Изменить ID");
-    console.log("2. Изменить полное имя");
-    console.log("3. Изменить короткое имя");
-    console.log("4. Изменить значение");
-    console.log("5. Изменить тип колеровки");
-    console.log("6. Сохранить");
-    console.log("7. Назад");
+    printSection(`Редактирование цвета: ${color.name}`);
+    printKV("ID", color.id);
+    printKV("Короткое имя", color.shortName || "-");
+    printKV("Значение", color.value ?? 0);
+    printKV("Тип колеровки", color.coloringTypeId || "-");
+
+    printSection("Меню цвета");
+    printInfo("1. Изменить ID");
+    printInfo("2. Изменить полное имя");
+    printInfo("3. Изменить короткое имя");
+    printInfo("4. Изменить значение");
+    printInfo("5. Изменить тип колеровки");
+    printInfo("6. Сохранить");
+    printInfo("7. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1423,23 +1507,24 @@ async function manageValueLinkedApplication(editorState, color) {
   ensureColorApplication(system, color);
 
   while (true) {
-    console.log(`\nКоэффициенты применения цвета: ${color.name}`);
+    printSection(`Коэффициенты применения цвета: ${color.name}`);
     system.layers.forEach((layer, layerIndex) => {
-      console.log(`${layerIndex + 1}. ${layer.name}`);
+      printInfo(`${layerIndex + 1}. ${layer.name}`);
       (layer.packaging || []).forEach((pack, packIndex) => {
         const current = color.application?.[layer.id]?.[pack] || {
           enabled: false,
           coefficient: 0,
         };
-        console.log(
+        printMuted(
           `   ${layerIndex + 1}.${packIndex + 1} ${pack} -> enabled=${current.enabled}, coefficient=${current.coefficient}`,
         );
       });
     });
 
-    console.log("\n1. Изменить применение");
-    console.log("2. Сохранить");
-    console.log("3. Назад");
+    printSection("Меню применения");
+    printInfo("1. Изменить применение");
+    printInfo("2. Сохранить");
+    printInfo("3. Назад");
 
     const choice = await ask("Выбор: ");
     if (choice === "1") {
@@ -1494,12 +1579,13 @@ async function manageColors(editorState) {
 
   while (true) {
     listColors(system, editorState.colorRegistryState);
-    console.log("\n1. Добавить цвет");
-    console.log("2. Изменить цвет");
-    console.log("3. Изменить коэффициенты цвета");
-    console.log("4. Удалить цвет");
-    console.log("5. Сохранить");
-    console.log("6. Назад");
+    printSection("Меню цветов");
+    printInfo("1. Добавить цвет");
+    printInfo("2. Изменить цвет");
+    printInfo("3. Изменить коэффициенты цвета");
+    printInfo("4. Удалить цвет");
+    printInfo("5. Сохранить");
+    printInfo("6. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1583,7 +1669,7 @@ async function manageColors(editorState) {
 }
 
 async function createMathType() {
-  console.log("\nСоздание типа колеровки");
+  printSection("Создание типа колеровки");
   const id = normalizeId(await ask("ID типа: "));
   const name = normalizeText(await ask("Название типа: "));
   const productName = normalizeText(await ask("Товар: "));
@@ -1621,11 +1707,12 @@ async function createMathType() {
 async function manageMathTypes(editorState) {
   while (true) {
     const items = listMathTypes(editorState.system, editorState.mathTypesState);
-    console.log("\n1. Добавить тип колеровки");
-    console.log("2. Изменить тип колеровки");
-    console.log("3. Удалить тип колеровки");
-    console.log("4. Сохранить");
-    console.log("5. Назад");
+    printSection("Меню типов колеровки");
+    printInfo("1. Добавить тип колеровки");
+    printInfo("2. Изменить тип колеровки");
+    printInfo("3. Удалить тип колеровки");
+    printInfo("4. Сохранить");
+    printInfo("5. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -1702,7 +1789,7 @@ async function manageMathTypes(editorState) {
 }
 
 async function createSystem() {
-  console.log("\nСоздание новой системы колеровки");
+  printSection("Создание новой системы колеровки");
   const name = normalizeText(await ask("Название системы: "));
   const id = normalizeId(
     (await ask("ID системы (Enter = сгенерировать): ")).trim() || name,
@@ -1765,13 +1852,13 @@ async function createSystem() {
 
   const qCount = Number(await ask("Сколько вопросов добавить сейчас?: ")) || 0;
   for (let i = 0; i < qCount; i++) {
-    console.log(`\nВопрос ${i + 1}`);
+    printSection(`Вопрос ${i + 1}`);
     system.questions.push(await createQuestion(system));
   }
 
   const lCount = Number(await ask("Сколько слоев добавить сейчас?: ")) || 0;
   for (let i = 0; i < lCount; i++) {
-    console.log(`\nСлой ${i + 1}`);
+    printSection(`Слой ${i + 1}`);
     system.layers.push(await createLayer());
   }
 
@@ -1792,7 +1879,7 @@ async function createSystem() {
 
   const cCount = Number(await ask("Сколько цветов добавить сейчас?: ")) || 0;
   for (let i = 0; i < cCount; i++) {
-    console.log(`\nЦвет ${i + 1}`);
+    printSection(`Цвет ${i + 1}`);
     const color = await createColor(system, mathTypesState);
     if (getColorModel(system) === "value-linked") {
       colorRegistryState.items.push(color);
@@ -1817,7 +1904,7 @@ async function createSystem() {
 async function editSystemCard(editorState) {
   const { registry, registryItem, system } = editorState;
 
-  console.log(`\nКарточка системы: ${registryItem.name}`);
+  printSection(`Карточка системы: ${registryItem.name}`);
   const newName = normalizeText(
     (await ask(`Название [${system.name}]: `)).trim() || system.name,
   );
@@ -1943,16 +2030,18 @@ async function editExistingSystem(registry, registryItem) {
   };
 
   while (true) {
-    console.log(
-      `\nРедактирование системы: ${editorState.system.name}${editorState.dirty || editorState.registryDirty ? " *" : ""}`,
+    printHeader(
+      "ARTONE",
+      `Редактирование: ${editorState.system.name}${editorState.dirty || editorState.registryDirty ? " *" : ""}`,
     );
-    console.log("1. Карточка системы");
-    console.log("2. Вопросы системы");
-    console.log("3. Слои системы");
-    console.log("4. Цвета и коэффициенты");
-    console.log("5. Типы колеровки");
-    console.log("6. Сохранить");
-    console.log("7. Назад");
+    printSection("Меню системы");
+    printInfo("1. Карточка системы");
+    printInfo("2. Вопросы системы");
+    printInfo("3. Слои системы");
+    printInfo("4. Цвета и коэффициенты");
+    printInfo("5. Типы колеровки");
+    printInfo("6. Сохранить");
+    printInfo("7. Назад");
 
     const choice = await ask("Выбор: ");
 
@@ -2022,12 +2111,16 @@ async function main() {
   while (true) {
     const registry = loadRegistry();
 
-    console.log("\nАдминка систем колеровки");
+    clear();
+    printHeader("ARTONE", "FRESCO CLI · Колеровка");
     listSystems(registry);
-    console.log("\n1. Создать новую систему");
-    console.log("2. Изменить существующую систему");
-    console.log("3. Удалить систему");
-    console.log("4. Выход");
+
+    printSection("Главное меню");
+    printInfo("1. Создать новую систему");
+    printInfo("2. Изменить существующую систему");
+    printInfo("3. Удалить систему");
+    printInfo("4. Выход");
+    printMenuHint("1, 2, 3, 4 — выбери действие");
 
     const choice = await ask("Выбор: ");
 
@@ -2049,7 +2142,7 @@ async function main() {
         saveMathRegistry(created.system, created.mathTypesState.items);
       }
 
-      console.log("Система создана.");
+      printSuccess("Система создана.");
     } else if (choice === "2") {
       const item = await chooseSystem(
         registry,
@@ -2057,12 +2150,16 @@ async function main() {
       );
       if (item) {
         await editExistingSystem(registry, item);
+      } else {
+        printError("Система не найдена.");
       }
     } else if (choice === "3") {
       await deleteSystem(registry);
-      console.log("Удаление завершено.");
+      printSuccess("Удаление завершено.");
     } else if (choice === "4") {
       break;
+    } else {
+      printError("Неизвестный пункт меню.");
     }
   }
 

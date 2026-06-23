@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=START
+Exec=sh -c 'cd "$(dirname "%k")" && node run-js.js; echo; read -p "Press Enter..."'
+Icon=/home/george/Рабочий стол/8/4b20cee8-43ba-4b0e-89e6-4e80572981e3.png
+Terminal=true

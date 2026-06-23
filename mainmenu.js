@@ -4,6 +4,20 @@ import readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { systemColorBase } from "./system-color-base.js";
 import { materialsDB } from "./materials-db.js";
+import {
+  C,
+  clear,
+  printHeader,
+  printLine,
+  printInfo,
+  printSuccess,
+  printError,
+  printMuted,
+  printSection,
+  printKV,
+  printCard,
+  printMenuHint,
+} from "./artone-ui.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -150,33 +164,52 @@ function loadMathRegistry(system) {
 }
 
 function listSystems() {
-  console.log("\nСистемы колеровки:");
   const active = (systemColorBase.registry || []).filter(
     (item) => item.active !== false,
   );
 
-  active.forEach((item, index) => {
-    console.log(`${index + 1}. ${item.name}`);
-  });
+  printSection("Системы колеровки");
 
-  console.log("\n1. Выбрать систему");
-  console.log("2. Выход");
+  if (!active.length) {
+    printMuted("Нет активных систем.");
+  } else {
+    active.forEach((item, index) => {
+      printCard({
+        key: String(index + 1),
+        title: item.name,
+        file: item.file || "",
+        status: "Активна",
+        statusColor: C.green,
+      });
+    });
+  }
+
+  printSection("Главное меню");
+  printInfo("1. Выбрать систему");
+  printInfo("2. Выход");
 
   return active;
 }
 
 async function chooseSystem() {
   while (true) {
+    clear();
+    printHeader("ARTONE", "FRESCO CLI · Калькулятор");
     const systems = listSystems();
+    printMenuHint("1 — выбрать систему    2 — выход");
+
     const choice = await ask("Выбор: ");
 
     if (choice === "2") return null;
-    if (choice !== "1") continue;
+    if (choice !== "1") {
+      printError("Неизвестный пункт меню.");
+      continue;
+    }
 
     const number = Number(await ask("Номер системы: ")) - 1;
     const picked = systems[number];
     if (!picked) {
-      console.log("Неверный номер.");
+      printError("Неверный номер.");
       continue;
     }
 
@@ -186,13 +219,13 @@ async function chooseSystem() {
 
 function listQuestionOptions(question) {
   (question.options || []).forEach((option, index) => {
-    console.log(`${index + 1}. ${option.label}`);
+    printInfo(`${index + 1}. ${option.label}`);
   });
 }
 
 async function askSelectQuestion(question) {
   while (true) {
-    console.log(`\n${question.label}:`);
+    printSection(question.label);
     listQuestionOptions(question);
 
     const raw = await ask("Выбор: ");
@@ -200,7 +233,7 @@ async function askSelectQuestion(question) {
     const option = question.options[index];
 
     if (option) return option.value;
-    console.log("Неверный номер.");
+    printError("Неверный номер.");
   }
 }
 
@@ -213,7 +246,7 @@ async function askBooleanQuestion(question) {
       return true;
     if (raw === "нет" || raw === "н" || raw === "no" || raw === "n")
       return false;
-    console.log("Введите да или нет.");
+    printError("Введите да или нет.");
   }
 }
 
@@ -222,7 +255,7 @@ async function askNumberQuestion(question) {
     const raw = await ask(`\n${question.label}: `);
     const value = parseNumber(raw);
     if (value > 0) return value;
-    console.log("Введите число больше нуля.");
+    printError("Введите число больше нуля.");
   }
 }
 
@@ -230,7 +263,7 @@ async function askTextQuestion(question) {
   while (true) {
     const raw = normalizeText(await ask(`\n${question.label}: `));
     if (raw) return raw;
-    console.log("Поле не должно быть пустым.");
+    printError("Поле не должно быть пустым.");
   }
 }
 
@@ -272,12 +305,12 @@ async function askColorQuestion(system, question) {
     );
 
     while (true) {
-      console.log(`\n${question.label}:`);
+      printSection(question.label);
       colors.forEach((color, index) => {
         const title = color.shortName
           ? `${color.name} / ${color.shortName}`
           : `${color.name} / ${color.id}`;
-        console.log(`${index + 1}. ${title}`);
+        printInfo(`${index + 1}. ${title}`);
       });
 
       const raw = await ask("Номер цвета: ");
@@ -285,14 +318,14 @@ async function askColorQuestion(system, question) {
       const color = colors[index];
 
       if (color) return color;
-      console.log("Неверный номер.");
+      printError("Неверный номер.");
     }
   }
 
   while (true) {
-    console.log(`\n${question.label}:`);
+    printSection(question.label);
     system.colors.forEach((color, index) => {
-      console.log(`${index + 1}. ${color.name} / ${color.id}`);
+      printInfo(`${index + 1}. ${color.name} / ${color.id}`);
     });
 
     const raw = await ask("Номер цвета: ");
@@ -300,7 +333,7 @@ async function askColorQuestion(system, question) {
     const color = system.colors[index];
 
     if (color) return color;
-    console.log("Неверный номер.");
+    printError("Неверный номер.");
   }
 }
 
@@ -461,7 +494,7 @@ function calculateMaterialLayer(layer, answers, bindings) {
   const material = findMaterialByName(materialName);
 
   if (!material) {
-    console.log(`\nНе найден материал: ${materialName}`);
+    printError(`Не найден материал: ${materialName}`);
     return {
       layerId: layer.id,
       layerName: layer.name,
@@ -608,61 +641,63 @@ function calculateResults(system, answers) {
 }
 
 function printResults(report) {
-  console.log("\nРезультат расчета:");
+  printHeader("ARTONE", "Результат расчета");
+  printSection("Слои и материалы");
 
   for (const layer of report.layers) {
-    console.log(`\n${layer.layerName}: ${layer.materialName || "-"}`);
-
-    if (layer.skipped) {
-      console.log(`- Слой пропущен (${layer.skipReason}).`);
-      console.log("Итого по слою: 0 руб.");
-      continue;
-    }
-
-    if (!layer.items.length) {
-      console.log("- Нет данных по фасовкам.");
-      console.log(`Итого по слою: ${layer.total} руб.`);
-      continue;
-    }
-
-    for (const item of layer.items) {
-      console.log(`- ${item.packName} × ${item.count} = ${item.total} руб.`);
-    }
+    printCard({
+      title: `${layer.layerName}: ${layer.materialName || "-"}`,
+      description: layer.skipped
+        ? `Слой пропущен (${layer.skipReason}).`
+        : layer.items.length
+          ? layer.items
+              .map(
+                (item) =>
+                  `${item.packName} × ${item.count} = ${item.total} руб.`,
+              )
+              .join(" ; ")
+          : "Нет данных по фасовкам.",
+      status: layer.skipped ? "Пропущен" : "Рассчитан",
+      statusColor: layer.skipped ? C.red : C.green,
+    });
 
     const tint = report.tintResults.find((x) => x.layerId === layer.layerId);
     if (tint) {
-      console.log(
-        `- Колеровка: ${tint.productName} (${tint.colorShortName}) × ${tint.tubeCount} = ${tint.total} руб.`,
+      printMuted(
+        `Колеровка: ${tint.productName} (${tint.colorShortName}) × ${tint.tubeCount} = ${tint.total} руб.`,
       );
     }
 
     const layerTotalWithTint = roundMoney(
       layer.total + (tint ? tint.total : 0),
     );
-
-    console.log(`Итого по слою: ${layerTotalWithTint} руб.`);
+    printKV("Итого по слою", `${layerTotalWithTint} руб.`, C.gold);
+    console.log("");
   }
 
+  printSection("Колеровка всего");
   if (report.tintResults.length) {
-    console.log("\nКолеровка всего:");
     for (const tint of report.tintResults) {
-      console.log(
-        `- ${tint.layerName}: ${tint.productName} (${tint.colorShortName}) × ${tint.tubeCount} = ${tint.total} руб.`,
+      printInfo(
+        `${tint.layerName}: ${tint.productName} (${tint.colorShortName}) × ${tint.tubeCount} = ${tint.total} руб.`,
       );
     }
-    console.log(`Итого колеровка: ${report.tintTotal} руб.`);
+    printKV("Итого колеровка", `${report.tintTotal} руб.`, C.teal);
   } else {
-    console.log("\nКолеровка всего: 0 руб.");
+    printMuted("Колеровка всего: 0 руб.");
   }
 
-  console.log(`\nИтого материалы: ${report.materialsTotal} руб.`);
-  console.log(`Итого с колеровкой: ${report.grandTotal} руб.`);
+  printSection("Итоги");
+  printKV("Итого материалы", `${report.materialsTotal} руб.`, C.soft);
+  printKV("Итого с колеровкой", `${report.grandTotal} руб.`, C.gold);
 }
 
 async function runSystem(system) {
-  console.log(`\nСистема: ${system.name}`);
+  clear();
+  printHeader("ARTONE", `Система: ${system.name}`);
   if (system.description) {
-    console.log(system.description);
+    printInfo(system.description);
+    printLine();
   }
 
   const answers = {};
@@ -673,6 +708,8 @@ async function runSystem(system) {
 
   const report = calculateResults(system, answers);
   printResults(report);
+
+  await ask("\nНажми Enter, чтобы вернуться в меню...");
 }
 
 async function main() {
